@@ -3,11 +3,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { FavoriteHeart } from "@/components/favorite-heart";
 import { PriceTag } from "@/components/price-tag";
 import { ListingsMap } from "@/components/listings-map";
 import { HOT_TIER_LABELS } from "@/lib/brand";
 import { formatSaleSchedule } from "@/lib/format";
+import { getFavoritedListingIdSet } from "@/lib/favorites-server";
 import { getListingById } from "@/lib/listings";
+import { createClient } from "@/lib/supabase-server";
 
 export const revalidate = 60;
 
@@ -37,6 +40,12 @@ export default async function SaleDetailPage({ params }: PageProps) {
   const { id } = await params;
   const sale = await getListingById(id);
   if (!sale) notFound();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const favoritedIds = user ? await getFavoritedListingIdSet(user.id, [sale.id]) : new Set<string>();
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
@@ -81,9 +90,16 @@ export default async function SaleDetailPage({ params }: PageProps) {
         ))}
       </div>
 
-      {sale.favoriteCount > 0 && (
-        <p className="mt-3 text-sm font-medium text-interest-pink">♥ {sale.favoriteCount} interested</p>
-      )}
+      <div className="mt-3">
+        <FavoriteHeart
+          listingId={sale.id}
+          userId={user?.id ?? null}
+          initialFavorited={favoritedIds.has(sale.id)}
+          initialCount={sale.favoriteCount}
+          redirectPath={`/sale/${sale.id}`}
+          size="lg"
+        />
+      </div>
 
       {sale.description && (
         <p className="mt-4 whitespace-pre-line text-sm leading-6 text-ink">{sale.description}</p>

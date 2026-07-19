@@ -3,6 +3,9 @@ import { Fredoka, Kalam, Work_Sans } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 
+import { signOut } from "@/app/auth/actions";
+import { createClient } from "@/lib/supabase-server";
+
 const fredoka = Fredoka({
   variable: "--font-fredoka",
   subsets: ["latin"],
@@ -56,10 +59,15 @@ export default function RootLayout({
   );
 }
 
-function SiteHeader() {
+async function SiteHeader() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <header className="border-b-2 border-tan-border bg-paper">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
           <span
             aria-hidden
@@ -76,6 +84,26 @@ function SiteHeader() {
           </span>
           <span className="font-display text-xl font-semibold tracking-tight">GarageHunt</span>
         </Link>
+
+        {user ? (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="hidden text-muted sm:inline">{user.email}</span>
+            <form action={signOut}>
+              <button type="submit" className="font-medium text-ink underline underline-offset-2 hover:text-coral">
+                Log out
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div className="flex items-center gap-4 text-sm font-medium">
+            <Link href="/login" className="text-ink underline underline-offset-2 hover:text-coral">
+              Log in
+            </Link>
+            <Link href="/register" className="rounded-full bg-coral px-3.5 py-1.5 text-paper hover:bg-[#e55a3c]">
+              Sign up
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );

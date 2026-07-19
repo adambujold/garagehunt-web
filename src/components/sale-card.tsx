@@ -1,12 +1,21 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { FavoriteHeart } from "@/components/favorite-heart";
 import { PriceTag } from "@/components/price-tag";
 import { HOT_TIER_LABELS } from "@/lib/brand";
 import type { Listing } from "@/lib/listings";
 import { formatSaleSchedule } from "@/lib/format";
 
-export function SaleCard({ sale }: { sale: Listing }) {
+export function SaleCard({
+  sale,
+  currentUserId,
+  isFavorited,
+}: {
+  sale: Listing;
+  currentUserId: string | null;
+  isFavorited: boolean;
+}) {
   const photo = sale.photoUrls[0];
 
   return (
@@ -36,11 +45,16 @@ export function SaleCard({ sale }: { sale: Listing }) {
         {sale.categories.length > 0 && (
           <p className="mt-1.5 truncate text-xs text-muted">{sale.categories.join(" · ")}</p>
         )}
-        {sale.favoriteCount > 0 && (
-          <p className="mt-1 text-xs font-medium text-interest-pink">
-            ♥ {sale.favoriteCount} interested
-          </p>
-        )}
+        <div className="mt-1.5">
+          <FavoriteHeart
+            listingId={sale.id}
+            userId={currentUserId}
+            initialFavorited={isFavorited}
+            initialCount={sale.favoriteCount}
+            redirectPath={`/sale/${sale.id}`}
+            size="sm"
+          />
+        </div>
       </div>
     </Link>
   );

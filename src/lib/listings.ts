@@ -7,7 +7,7 @@ import { deriveTitle } from '@/lib/format';
 // come back already fuzzed for any listing that isn't revealed yet, since
 // this client only ever holds the anon key. Nothing here needs to know
 // about reveal_at itself; the view already decided what's safe to return.
-const LISTING_SELECT = `
+export const LISTING_SELECT = `
   id, title, description, address_text, latitude, longitude, is_revealed,
   start_date, end_date, daily_start_time, daily_end_time, status,
   other_items, favorite_count, event_id, is_boosted, payment_method,
@@ -16,7 +16,7 @@ const LISTING_SELECT = `
   listing_photos(storage_key, sort_order, moderation_status)
 `;
 
-type ListingRow = {
+export type ListingRow = {
   id: string;
   title: string | null;
   description: string | null;
@@ -62,7 +62,7 @@ export type Listing = {
   createdAt: string;
 };
 
-function mapRow(row: ListingRow): Listing {
+export function mapRow(row: ListingRow): Listing {
   const categories = (row.listing_categories ?? [])
     .map((entry) => entry.categories?.name)
     .filter((name): name is string => Boolean(name));
@@ -124,6 +124,17 @@ export async function getListingById(id: string): Promise<Listing | null> {
   if (error) throw error;
   if (!data) return null;
   return mapRow(data as unknown as ListingRow);
+}
+
+// /favorites — a buyer's favorited listings, in whatever order the caller
+// asks for by re-sorting the result (favorites-server.ts returns ids most-
+// recently-favorited first; this just needs to fetch the matching rows).
+export async function getListingsByIds(ids: string[]): Promise<Listing[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from('sale_listings').select(LISTING_SELECT).in('id', ids);
+
+  if (error) throw error;
+  return (data as unknown as ListingRow[]).map(mapRow);
 }
 
 // Sitemap needs every public listing id without the rest of the payload.

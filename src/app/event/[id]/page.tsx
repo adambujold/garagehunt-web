@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { SaleCard } from "@/components/sale-card";
 import { ListingsMap } from "@/components/listings-map";
 import { formatSaleDateRange } from "@/lib/format";
+import { getFavoritedListingIdSet } from "@/lib/favorites-server";
 import { getEventById, getListingsForEvent } from "@/lib/listings";
+import { createClient } from "@/lib/supabase-server";
 
 export const revalidate = 60;
 
@@ -28,6 +30,14 @@ export default async function EventPage({ params }: PageProps) {
   const [event, listings] = await Promise.all([getEventById(id), getListingsForEvent(id)]);
   if (!event) notFound();
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const favoritedIds = user
+    ? await getFavoritedListingIdSet(user.id, listings.map((sale) => sale.id))
+    : new Set<string>();
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <p className="font-tag text-sm font-bold text-violet">Town-wide sale event</p>
@@ -45,7 +55,7 @@ export default async function EventPage({ params }: PageProps) {
             </p>
           )}
           {listings.map((sale) => (
-            <SaleCard key={sale.id} sale={sale} />
+            <SaleCard key={sale.id} sale={sale} currentUserId={user?.id ?? null} isFavorited={favoritedIds.has(sale.id)} />
           ))}
         </div>
 

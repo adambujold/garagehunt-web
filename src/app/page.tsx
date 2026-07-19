@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 
 import { SaleCard } from "@/components/sale-card";
 import { ListingsMap } from "@/components/listings-map";
+import { getFavoritedListingIdSet } from "@/lib/favorites-server";
 import { getPublishedListings } from "@/lib/listings";
+import { createClient } from "@/lib/supabase-server";
 
 export const metadata: Metadata = {
   title: "Find garage sales near you",
@@ -14,6 +16,14 @@ export const revalidate = 60;
 
 export default async function DiscoverPage() {
   const listings = await getPublishedListings();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const favoritedIds = user
+    ? await getFavoritedListingIdSet(user.id, listings.map((sale) => sale.id))
+    : new Set<string>();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -30,7 +40,7 @@ export default async function DiscoverPage() {
             </p>
           )}
           {listings.map((sale) => (
-            <SaleCard key={sale.id} sale={sale} />
+            <SaleCard key={sale.id} sale={sale} currentUserId={user?.id ?? null} isFavorited={favoritedIds.has(sale.id)} />
           ))}
         </div>
 
