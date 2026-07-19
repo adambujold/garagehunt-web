@@ -1,26 +1,58 @@
 @import "tailwindcss";
+@import "mapbox-gl/dist/mapbox-gl.css";
 
+/* GarageHunt brand tokens — same palette as the mobile app's
+   constants/brand.ts. This is a fixed single-theme (light) brand identity
+   by design, not an oversight — the product itself has no dark mode. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-lavender: #EDE3F5;
+  --color-paper: #FFF8E7;
+  --color-ink: #2B1B4D;
+  --color-near-black: #1A1030;
+  --color-coral: #FF6B4A;
+  --color-jade: #0F9D8B;
+  --color-violet: #7B5FD9;
+  --color-marigold: #FFC53D;
+  --color-tan: #F0DFC0;
+  --color-tan-border: #D9C6A0;
+  --color-violet-border: #C6B2E8;
+  --color-amber-bg: #FFEFD1;
+  --color-amber-text: #8A5A00;
+  --color-muted: #8A7A9E;
+  --color-muted-dark: #5B4A7A;
+  --color-muted-light: #B8A8CC;
+  --color-interest-pink: #D4537E;
+  --color-error-text: #B3261E;
+  --color-error-bg: #FDECEA;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-lavender: var(--color-lavender);
+  --color-paper: var(--color-paper);
+  --color-ink: var(--color-ink);
+  --color-near-black: var(--color-near-black);
+  --color-coral: var(--color-coral);
+  --color-jade: var(--color-jade);
+  --color-violet: var(--color-violet);
+  --color-marigold: var(--color-marigold);
+  --color-tan: var(--color-tan);
+  --color-tan-border: var(--color-tan-border);
+  --color-violet-border: var(--color-violet-border);
+  --color-amber-bg: var(--color-amber-bg);
+  --color-amber-text: var(--color-amber-text);
+  --color-muted: var(--color-muted);
+  --color-muted-dark: var(--color-muted-dark);
+  --color-muted-light: var(--color-muted-light);
+  --color-interest-pink: var(--color-interest-pink);
+  --color-error-text: var(--color-error-text);
+  --color-error-bg: var(--color-error-bg);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-fredoka);
+  --font-body: var(--font-work-sans);
+  --font-tag: var(--font-kalam);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-lavender);
+  color: var(--color-ink);
 }
