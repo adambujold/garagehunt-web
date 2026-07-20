@@ -1,8 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Routes that require a signed-in session.
-const PROTECTED_PATH_PREFIXES = ['/list-a-sale', '/favorites', '/saved-searches', '/route-planner'];
+// Routes that require a signed-in session. Organizer-specific routes are
+// also gated on is_verified_organizer, but that check happens in each
+// page itself (a Server Component DB read) — middleware only checks auth,
+// same as every other protected route here.
+const PROTECTED_PATH_PREFIXES = [
+  '/list-a-sale',
+  '/favorites',
+  '/saved-searches',
+  '/route-planner',
+  '/organizer-application',
+  '/organizer-dashboard',
+  '/create-event',
+  '/organizer-event',
+];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
