@@ -9,6 +9,11 @@ import { moderateListingPhoto } from '@/lib/moderation';
 const PHOTO_BUCKET = 'listing-photos';
 export const MAX_LISTING_PHOTOS = 10;
 
+// listing_photos.photo_type (mobile repo's 0036_day_of_photos.sql). 'planning'
+// is the default for every normal List a Sale upload; 'day_of' is tagged only
+// by the day-of add-photos flow (src/app/day-of-photos/[id]).
+export type PhotoType = 'planning' | 'day_of';
+
 function isHeic(file: File): boolean {
   const type = file.type.toLowerCase();
   return type === 'image/heic' || type === 'image/heif' || /\.(heic|heif)$/i.test(file.name);
@@ -53,7 +58,17 @@ export async function preparePickedPhoto(file: File): Promise<PendingPhoto> {
   return { blob, extension, contentType, previewUrl: URL.createObjectURL(blob) };
 }
 
-export async function uploadListingPhoto(listingId: string, photo: PendingPhoto, sortOrder: number): Promise<void> {
+// A listing_photos row already persisted in the DB (has a real id), as
+// surfaced back to the day-of add-photos screen so it can show what's already
+// there and delete individual ones.
+export type UploadedPhoto = { id: string; storageKey: string; url: string; moderationStatus: string };
+
+export async function uploadListingPhoto(
+  listingId: string,
+  photo: PendingPhoto,
+  sortOrder: number,
+  photoType: PhotoType = 'planning'
+): Promise<UploadedPhoto> {
   const supabase = createClient();
   const randomName = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.${photo.extension}`;
   const storageKey = `${listingId}/${randomName}`;
@@ -75,14 +90,62 @@ export async function uploadListingPhoto(listingId: string, photo: PendingPhoto,
   if (uploadError) throw uploadError;
 
   const moderationStatus = decision === 'approve' ? 'approved' : 'pending';
-  const { error: insertError } = await supabase
+  const { data, error: insertError } = await supabase
     .from('listing_photos')
-    .insert({ listing_id: listingId, storage_key: storageKey, sort_order: sortOrder, moderation_status: moderationStatus });
+    .insert({
+      listing_id: listingId,
+      storage_key: storageKey,
+      sort_order: sortOrder,
+      moderation_status: moderationStatus,
+      photo_type: photoType,
+    })
+    .select('id, storage_key, moderation_status')
+    .single();
 
   if (insertError) {
     await supabase.storage.from(PHOTO_BUCKET).remove([storageKey]).catch(() => {});
     throw insertError;
   }
+
+  return {
+    id: data.id as string,
+    storageKey: data.storage_key as string,
+    url: getListingPhotoUrl(data.storage_key as string),
+    moderationStatus: data.moderation_status as string,
+  };
+}
+
+// The day_of photos already added to a listing — powers the day-of add-photos
+// screen's "what's already there" grid. Returns pending ones too (so the
+// seller sees a photo they just added even while it awaits manual review),
+// unlike the public listings query which shows approved only.
+export async function fetchDayOfPhotos(listingId: string): Promise<UploadedPhoto[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('listing_photos')
+    .select('id, storage_key, moderation_status, created_at')
+    .eq('listing_id', listingId)
+    .eq('photo_type', 'day_of')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    storageKey: row.storage_key as string,
+    url: getListingPhotoUrl(row.storage_key as string),
+    moderationStatus: row.moderation_status as string,
+  }));
+}
+
+export async function deleteListingPhoto(photoId: string, storageKey: string): Promise<void> {
+  const supabase = createClient();
+  // Storage object first, then the row — an orphaned row pointing at a
+  // deleted object would render broken; the reverse (orphaned object, no row)
+  // is harmless. RLS scopes both deletes to the listing's own seller.
+  const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([storageKey]);
+  if (storageError) throw storageError;
+  const { error: deleteError } = await supabase.from('listing_photos').delete().eq('id', photoId);
+  if (deleteError) throw deleteError;
 }
 
 export async function uploadPendingPhotos(listingId: string, photos: PendingPhoto[]): Promise<void> {

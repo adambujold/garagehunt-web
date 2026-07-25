@@ -81,6 +81,7 @@ export default async function SaleDetailPage({ params }: PageProps) {
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {sale.hotTier && <PriceTag label={HOT_TIER_LABELS[sale.hotTier]} variant={sale.hotTier} rotate={-2} />}
+        {sale.hasFreshPhotoToday && <PriceTag label="📸 Fresh Photos" variant="fresh" rotate={-2} />}
         {sale.isBoosted && <PriceTag label="⭐ Featured" variant="boosted" rotate={-2} />}
         {sale.paymentMethod === "cash_and_etransfer" && (
           <PriceTag label="💸 Cash + e-Transfer" variant="etransfer" rotate={-2} />

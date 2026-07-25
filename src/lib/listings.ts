@@ -13,7 +13,7 @@ export const LISTING_SELECT = `
   other_items, favorite_count, event_id, is_boosted, payment_method,
   created_at,
   listing_categories(categories(name)),
-  listing_photos(storage_key, sort_order, moderation_status)
+  listing_photos(storage_key, sort_order, moderation_status, photo_type, created_at)
 `;
 
 export type ListingRow = {
@@ -36,7 +36,9 @@ export type ListingRow = {
   payment_method: 'cash_only' | 'cash_and_etransfer';
   created_at: string;
   listing_categories: { categories: { name: string } | null }[] | null;
-  listing_photos: { storage_key: string; sort_order: number; moderation_status: string }[] | null;
+  listing_photos:
+    | { storage_key: string; sort_order: number; moderation_status: string; photo_type: string; created_at: string }[]
+    | null;
 };
 
 export type Listing = {
@@ -59,8 +61,51 @@ export type Listing = {
   isBoosted: boolean;
   paymentMethod: 'cash_only' | 'cash_and_etransfer';
   photoUrls: string[];
+  // True when an approved day_of photo exists from *today* — drives the
+  // "📸 Fresh Photos" badge (feature spec 4f). Derived at render time in
+  // mapRow, never stored; re-derived on every fetch so it resets each day.
+  hasFreshPhotoToday: boolean;
   createdAt: string;
 };
+
+// Which Toronto calendar day a timestamp falls on, as 'YYYY-MM-DD'. Anchored
+// to America/Toronto (not the SSR server's UTC) so the website's notion of
+// "today" matches the cron job that sends the reminder (mobile repo's
+// 0037_day_of_photo_reminders_cron.sql, same timezone) and the London launch
+// market. en-CA formats as YYYY-MM-DD.
+function torontoDay(date: Date): string {
+  return date.toLocaleString('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
+// Day-of Photos display rule (feature spec 4f / tech arch Section 10), derived
+// at render time — no stored "primary photo" flag. From the approved photos
+// (only ever those on this public, crawlable page), any day_of photo added
+// *today* leads the gallery/thumbnail (most recent first); everything else
+// (planning photos, plus day_of photos from earlier days of a multi-day sale)
+// follows in sort_order. With no day_of photo from today this is exactly the
+// old behavior: all approved photos in sort_order.
+function deriveDisplayPhotos(
+  photos: ListingRow['listing_photos'],
+  now: Date
+): { photoUrls: string[]; hasFreshPhotoToday: boolean } {
+  const approved = (photos ?? []).filter((p) => p.moderation_status === 'approved');
+  const todayStr = torontoDay(now);
+  const freshToday = approved
+    .filter((p) => p.photo_type === 'day_of' && torontoDay(new Date(p.created_at)) === todayStr)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const freshKeys = new Set(freshToday.map((p) => p.storage_key));
+  const rest = approved.filter((p) => !freshKeys.has(p.storage_key)).sort((a, b) => a.sort_order - b.sort_order);
+
+  return {
+    photoUrls: [...freshToday, ...rest].map((p) => getListingPhotoUrl(p.storage_key)),
+    hasFreshPhotoToday: freshToday.length > 0,
+  };
+}
 
 export function mapRow(row: ListingRow): Listing {
   const categories = (row.listing_categories ?? [])
@@ -69,11 +114,10 @@ export function mapRow(row: ListingRow): Listing {
 
   // Only ever show photos a human/AI pass has actually cleared — a photo
   // still `pending` review has no business being indexed on a public,
-  // crawlable page before a person has looked at it.
-  const photoUrls = (row.listing_photos ?? [])
-    .filter((photo) => photo.moderation_status === 'approved')
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((photo) => getListingPhotoUrl(photo.storage_key));
+  // crawlable page before a person has looked at it. deriveDisplayPhotos
+  // applies that approved-only filter and then leads with today's day_of
+  // photos (feature spec 4f).
+  const { photoUrls, hasFreshPhotoToday } = deriveDisplayPhotos(row.listing_photos, new Date());
 
   return {
     id: row.id,
@@ -95,6 +139,7 @@ export function mapRow(row: ListingRow): Listing {
     isBoosted: row.is_boosted,
     paymentMethod: row.payment_method,
     photoUrls,
+    hasFreshPhotoToday,
     createdAt: row.created_at,
   };
 }

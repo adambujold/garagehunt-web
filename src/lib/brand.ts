@@ -45,7 +45,8 @@ export type PriceTagVariant =
   | 'infernoHot'
   | 'organizer'
   | 'boosted'
-  | 'etransfer';
+  | 'etransfer'
+  | 'fresh';
 
 export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   live: Colors.jade,
@@ -62,6 +63,11 @@ export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   organizer: Colors.violet,
   boosted: Colors.marigold,
   etransfer: Colors.jade,
+  // "📸 Fresh Photos" (feature spec 4f) — a bright cyan, its own hue distinct
+  // from every other badge so real-time freshness reads as a separate signal.
+  // Same hex as the mobile app's 'fresh' variant, per this file's keep-in-sync
+  // note.
+  fresh: '#1CA9C9',
 };
 
 // Escalating intensity for the three hot-listing tiers only — mirrors
