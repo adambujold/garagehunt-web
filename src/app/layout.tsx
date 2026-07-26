@@ -77,6 +77,7 @@ async function buildNavLinks(userId: string | null): Promise<NavLink[]> {
   const links: NavLink[] = [
     { href: "/", label: "Discover" },
     { href: "/list-a-sale", label: "List a Sale" },
+    { href: "/my-listings", label: "My Listings" },
     { href: "/favorites", label: "Favorites" },
     // The app calls this "Looking for"; same feature, saved_searches.
     { href: "/saved-searches", label: "Looking For" },

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import {
   deleteListingPhoto,
-  fetchDayOfPhotos,
+  fetchListingPhotos,
   MAX_LISTING_PHOTOS,
   preparePickedPhoto,
   uploadListingPhoto,
@@ -29,7 +29,7 @@ export function DayOfPhotosForm({ listingId, listingTitle }: { listingId: string
 
   useEffect(() => {
     let cancelled = false;
-    fetchDayOfPhotos(listingId)
+    fetchListingPhotos(listingId, "day_of")
       .then((existing) => {
         if (!cancelled) setPhotos(existing);
       })

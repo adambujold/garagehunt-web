@@ -7,6 +7,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 // same as every other protected route here.
 const PROTECTED_PATH_PREFIXES = [
   '/list-a-sale',
+  '/my-listings',
+  '/edit-listing',
   '/day-of-photos',
   '/favorites',
   '/saved-searches',

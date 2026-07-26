@@ -115,18 +115,26 @@ export async function uploadListingPhoto(
   };
 }
 
-// The day_of photos already added to a listing — powers the day-of add-photos
-// screen's "what's already there" grid. Returns pending ones too (so the
-// seller sees a photo they just added even while it awaits manual review),
-// unlike the public listings query which shows approved only.
-export async function fetchDayOfPhotos(listingId: string): Promise<UploadedPhoto[]> {
+// A listing's photos, for the seller's own editing screens. Returns pending
+// ones too — the seller should see a photo they just added even while it
+// awaits manual review — unlike the public listings query, which is
+// approved-only. Pass photoType to scope it: the day-of flow wants only
+// 'day_of', Edit Listing wants the original 'planning' set.
+export async function fetchListingPhotos(
+  listingId: string,
+  photoType?: PhotoType,
+  order: { column: 'created_at' | 'sort_order'; ascending: boolean } = {
+    column: 'created_at',
+    ascending: false,
+  }
+): Promise<UploadedPhoto[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('listing_photos')
-    .select('id, storage_key, moderation_status, created_at')
-    .eq('listing_id', listingId)
-    .eq('photo_type', 'day_of')
-    .order('created_at', { ascending: false });
+    .select('id, storage_key, moderation_status, created_at, sort_order')
+    .eq('listing_id', listingId);
+  if (photoType) query = query.eq('photo_type', photoType);
+  const { data, error } = await query.order(order.column, { ascending: order.ascending });
 
   if (error) throw error;
   return (data ?? []).map((row) => ({

@@ -36,9 +36,18 @@ export type ListingRow = {
   payment_method: 'cash_only' | 'cash_and_etransfer';
   created_at: string;
   listing_categories: { categories: { name: string } | null }[] | null;
-  listing_photos:
-    | { storage_key: string; sort_order: number; moderation_status: string; photo_type: string; created_at: string }[]
-    | null;
+  listing_photos: DisplayPhotoRow[] | null;
+};
+
+// A listing_photos row as embedded in a listing query — only the fields that
+// decide display order and eligibility. Exported so the seller dashboard
+// (lib/my-listings.ts) can reuse the same shape and derivation.
+export type DisplayPhotoRow = {
+  storage_key: string;
+  sort_order: number;
+  moderation_status: string;
+  photo_type: string;
+  created_at: string;
 };
 
 export type Listing = {
@@ -89,8 +98,8 @@ function torontoDay(date: Date): string {
 // (planning photos, plus day_of photos from earlier days of a multi-day sale)
 // follows in sort_order. With no day_of photo from today this is exactly the
 // old behavior: all approved photos in sort_order.
-function deriveDisplayPhotos(
-  photos: ListingRow['listing_photos'],
+export function deriveDisplayPhotos(
+  photos: DisplayPhotoRow[] | null,
   now: Date
 ): { photoUrls: string[]; hasFreshPhotoToday: boolean } {
   const approved = (photos ?? []).filter((p) => p.moderation_status === 'approved');
