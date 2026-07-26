@@ -4,6 +4,8 @@ import Link from "next/link";
 import "./globals.css";
 
 import { signOut } from "@/app/auth/actions";
+import { SiteNav, type NavLink } from "@/components/site-nav";
+import { getIsVerifiedOrganizer } from "@/lib/organizer-server";
 import { createClient } from "@/lib/supabase-server";
 
 const fredoka = Fredoka({
@@ -59,14 +61,81 @@ export default function RootLayout({
   );
 }
 
+// Mirrors the mobile app's tab bar + the organizer shortcut on its Profile
+// screen. Everything below already existed as a working route; none of it was
+// linked from anywhere, which is why the site looked far more basic than it is.
+async function buildNavLinks(userId: string | null): Promise<NavLink[]> {
+  // Signed out: only the two routes that make sense as an entry point. The
+  // rest are auth-gated by proxy.ts and would just bounce to /login.
+  if (!userId) {
+    return [
+      { href: "/", label: "Discover" },
+      { href: "/list-a-sale", label: "List a Sale" },
+    ];
+  }
+
+  const links: NavLink[] = [
+    { href: "/", label: "Discover" },
+    { href: "/list-a-sale", label: "List a Sale" },
+    { href: "/favorites", label: "Favorites" },
+    // The app calls this "Looking for"; same feature, saved_searches.
+    { href: "/saved-searches", label: "Looking For" },
+    { href: "/route-planner", label: "Route Planner" },
+  ];
+
+  // Same conditional the app's Profile screen uses: a verified organizer gets
+  // the dashboard, everyone else gets the application form. Never let a
+  // failure here take down the whole layout — the nav degrades to one fewer
+  // link rather than 500ing every page on the site.
+  try {
+    const isOrganizer = await getIsVerifiedOrganizer(userId);
+    links.push(
+      isOrganizer
+        ? { href: "/organizer-dashboard", label: "Organizer" }
+        : { href: "/organizer-application", label: "Become an Organizer" }
+    );
+  } catch {
+    // intentionally ignored — see above
+  }
+
+  return links;
+}
+
 async function SiteHeader() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const links = await buildNavLinks(user?.id ?? null);
+
+  // Server-rendered so the sign-out Server Action stays out of the Client
+  // Component; passed into SiteNav as a prop for the small-screen panel.
+  const authArea = user ? (
+    <div className="flex items-center justify-between gap-3 text-sm md:justify-end">
+      <span className="truncate text-muted">{user.email}</span>
+      <form action={signOut}>
+        <button
+          type="submit"
+          className="font-medium text-ink underline underline-offset-2 hover:text-coral"
+        >
+          Log out
+        </button>
+      </form>
+    </div>
+  ) : (
+    <div className="flex items-center gap-4 text-sm font-medium">
+      <Link href="/login" className="text-ink underline underline-offset-2 hover:text-coral">
+        Log in
+      </Link>
+      <Link href="/register" className="rounded-full bg-coral px-3.5 py-1.5 text-paper hover:bg-[#e55a3c]">
+        Sign up
+      </Link>
+    </div>
+  );
 
   return (
-    <header className="border-b-2 border-tan-border bg-paper">
+    // relative: the small-screen menu panel positions itself against this.
+    <header className="relative border-b-2 border-tan-border bg-paper">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
           <span
@@ -85,25 +154,13 @@ async function SiteHeader() {
           <span className="font-display text-xl font-semibold tracking-tight">GarageHunt</span>
         </Link>
 
-        {user ? (
-          <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-muted sm:inline">{user.email}</span>
-            <form action={signOut}>
-              <button type="submit" className="font-medium text-ink underline underline-offset-2 hover:text-coral">
-                Log out
-              </button>
-            </form>
-          </div>
-        ) : (
-          <div className="flex items-center gap-4 text-sm font-medium">
-            <Link href="/login" className="text-ink underline underline-offset-2 hover:text-coral">
-              Log in
-            </Link>
-            <Link href="/register" className="rounded-full bg-coral px-3.5 py-1.5 text-paper hover:bg-[#e55a3c]">
-              Sign up
-            </Link>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <SiteNav links={links} authArea={authArea} />
+          {/* Duplicated rather than moved into SiteNav so it stays server-
+              rendered; hidden on small screens, where it appears inside the
+              menu panel instead. */}
+          <div className="hidden md:block">{authArea}</div>
+        </div>
       </div>
     </header>
   );
