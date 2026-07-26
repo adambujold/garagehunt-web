@@ -26,13 +26,13 @@ export function SiteNav({ links, authArea }: { links: NavLink[]; authArea: React
   return (
     <>
       {/* Desktop / tablet */}
-      <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+      <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">
         {links.map((link) => (
           <Link
             key={link.href}
             href={link.href}
             aria-current={isActive(link.href) ? "page" : undefined}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
               isActive(link.href)
                 ? "bg-lavender text-ink"
                 : "text-muted-dark hover:bg-lavender/60 hover:text-ink"
@@ -50,7 +50,7 @@ export function SiteNav({ links, authArea }: { links: NavLink[]; authArea: React
         aria-expanded={open}
         aria-controls="site-mobile-menu"
         aria-label={open ? "Close menu" : "Open menu"}
-        className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-tan-border bg-white text-ink md:hidden"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-tan-border bg-white text-ink lg:hidden"
       >
         <span aria-hidden className="text-base leading-none">
           {open ? "×" : "☰"}
@@ -60,7 +60,7 @@ export function SiteNav({ links, authArea }: { links: NavLink[]; authArea: React
       {open && (
         <div
           id="site-mobile-menu"
-          className="absolute inset-x-0 top-full z-50 border-b-2 border-tan-border bg-paper shadow-lg md:hidden"
+          className="absolute inset-x-0 top-full z-50 border-b-2 border-tan-border bg-paper shadow-lg lg:hidden"
         >
           <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3 sm:px-6">
             {links.map((link) => (
@@ -81,7 +81,9 @@ export function SiteNav({ links, authArea }: { links: NavLink[]; authArea: React
                 {link.label}
               </Link>
             ))}
-            <div className="mt-2 border-t-2 border-tan-border pt-3">{authArea}</div>
+            {/* Null when signed in (Log out lives on /profile) — without this
+                guard the panel renders a stray divider under the last link. */}
+            {authArea && <div className="mt-2 border-t-2 border-tan-border pt-3">{authArea}</div>}
           </nav>
         </div>
       )}

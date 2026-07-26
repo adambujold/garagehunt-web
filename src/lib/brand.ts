@@ -87,6 +87,55 @@ export const HOT_TIER_THRESHOLDS = {
   infernoHot: 51,
 } as const;
 
+// Buyer tiers, keyed off users.buyer_checkin_count — ported from the mobile
+// app's constants/brand.ts + utils/shopper-tier.ts (feature spec 4e). Derived
+// at display time, never stored. Below `regular` no badge shows at all; a
+// brand-new buyer's profile stays clean rather than reading "unranked".
+export const SHOPPER_TIER_THRESHOLDS = {
+  regular: 10,
+  trustedShopper: 100,
+  superShopper: 250,
+} as const;
+
+export type ShopperTier = 'regular' | 'trustedShopper' | 'superShopper' | null;
+
+export const SHOPPER_TIER_LABELS: Record<Exclude<ShopperTier, null>, string> = {
+  regular: 'Regular',
+  trustedShopper: 'Trusted Shopper',
+  superShopper: 'Super Shopper',
+};
+
+export function deriveShopperTier(checkinCount: number): ShopperTier {
+  if (checkinCount >= SHOPPER_TIER_THRESHOLDS.superShopper) return 'superShopper';
+  if (checkinCount >= SHOPPER_TIER_THRESHOLDS.trustedShopper) return 'trustedShopper';
+  if (checkinCount >= SHOPPER_TIER_THRESHOLDS.regular) return 'regular';
+  return null;
+}
+
+// "6 check-ins · 4 more for Regular" — the same progress-note pattern My
+// Listings uses for Hot Listing tiers, so it reads as familiar rather than a
+// new convention (feature spec 4e explicitly asks for this).
+export function nextShopperTierProgress(
+  checkinCount: number
+): { remaining: number; nextLabel: string } | null {
+  if (checkinCount < SHOPPER_TIER_THRESHOLDS.regular) {
+    return { remaining: SHOPPER_TIER_THRESHOLDS.regular - checkinCount, nextLabel: SHOPPER_TIER_LABELS.regular };
+  }
+  if (checkinCount < SHOPPER_TIER_THRESHOLDS.trustedShopper) {
+    return {
+      remaining: SHOPPER_TIER_THRESHOLDS.trustedShopper - checkinCount,
+      nextLabel: SHOPPER_TIER_LABELS.trustedShopper,
+    };
+  }
+  if (checkinCount < SHOPPER_TIER_THRESHOLDS.superShopper) {
+    return {
+      remaining: SHOPPER_TIER_THRESHOLDS.superShopper - checkinCount,
+      nextLabel: SHOPPER_TIER_LABELS.superShopper,
+    };
+  }
+  return null;
+}
+
 export type HotTier = 'hot' | 'blazingHot' | 'infernoHot' | null;
 
 export const HOT_TIER_LABELS: Record<Exclude<HotTier, null>, string> = {

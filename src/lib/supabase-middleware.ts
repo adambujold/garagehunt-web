@@ -9,6 +9,7 @@ const PROTECTED_PATH_PREFIXES = [
   '/list-a-sale',
   '/my-listings',
   '/edit-listing',
+  '/profile',
   '/day-of-photos',
   '/favorites',
   '/saved-searches',
