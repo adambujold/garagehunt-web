@@ -113,12 +113,22 @@ export async function publishSaleListing(input: PublishSaleListingInput): Promis
     // A non-2xx arrives as FunctionsHttpError with our own JSON body attached;
     // that message is written for the seller (a rejected description's reason,
     // or the flagged-photo explanation), so surface it rather than a generic.
-    let message = 'Something went wrong publishing your listing.';
+    const response = (error as { context?: Response }).context;
+    let message: string | null = null;
     try {
-      const body = await (error as { context?: Response }).context?.json();
+      const body = await response?.json();
       if (body?.error) message = body.error as string;
     } catch {
-      // invoke failed below our function (network/gateway) — no body to read.
+      // No JSON body — failed below our function (gateway/network).
+    }
+    if (!message) {
+      // A 404 means the Edge Function isn't deployed. Previously this showed a
+      // generic "something went wrong", which cost a real debugging session —
+      // name the actual cause.
+      message =
+        response?.status === 404
+          ? "Publishing isn't available right now — the publish-listing function isn't deployed. (If you're the developer: deploy supabase/functions/publish-listing.)"
+          : `Something went wrong publishing your listing${response?.status ? ` (error ${response.status})` : ''}.`;
     }
     throw new Error(message);
   }
