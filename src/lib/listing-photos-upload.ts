@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase-browser';
-import { moderateListingPhoto } from '@/lib/moderation';
+// moderateListingPhoto is no longer called here — the Edge Function now
+// classifies, stores, and records the photo in one operation, so there is no
+// verdict for this layer to receive (0042).
 
 // Web port of the mobile app's utils/listing-photos.ts upload path — same
 // "transcode HEIC before it ever reaches Storage" fix (see the mobile
@@ -63,6 +65,12 @@ export async function preparePickedPhoto(file: File): Promise<PendingPhoto> {
 // there and delete individual ones.
 export type UploadedPhoto = { id: string; storageKey: string; url: string; moderationStatus: string };
 
+// The client's job is now just "hand over the bytes". moderate-listing-photo
+// classifies, stores, and records the photo in one server-side operation — see
+// the mobile repo's 0042_server_side_photo_moderation.sql. This code used to
+// receive a verdict and write the listing_photos row itself, which meant it
+// could ignore the verdict and insert 'approved'. Clients no longer hold
+// INSERT on listing_photos or on the bucket.
 export async function uploadListingPhoto(
   listingId: string,
   photo: PendingPhoto,
@@ -70,48 +78,49 @@ export async function uploadListingPhoto(
   photoType: PhotoType = 'planning'
 ): Promise<UploadedPhoto> {
   const supabase = createClient();
-  const randomName = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.${photo.extension}`;
-  const storageKey = `${listingId}/${randomName}`;
 
   const arrayBuffer = await photo.blob.arrayBuffer();
   if (arrayBuffer.byteLength < 1000) {
     throw new Error('That photo could not be read. Please try again.');
   }
-
   const imageBase64 = await arrayBufferToBase64(arrayBuffer);
-  const decision = await moderateListingPhoto(imageBase64, photo.contentType);
-  if (decision === 'reject') {
-    throw new Error("That photo doesn't meet our content guidelines. Please choose a different photo.");
-  }
 
-  const { error: uploadError } = await supabase.storage
-    .from(PHOTO_BUCKET)
-    .upload(storageKey, arrayBuffer, { contentType: photo.contentType });
-  if (uploadError) throw uploadError;
-
-  const moderationStatus = decision === 'approve' ? 'approved' : 'pending';
-  const { data, error: insertError } = await supabase
-    .from('listing_photos')
-    .insert({
+  const { data, error } = await supabase.functions.invoke('moderate-listing-photo', {
+    body: {
+      image_base64: imageBase64,
+      media_type: photo.contentType,
       listing_id: listingId,
-      storage_key: storageKey,
       sort_order: sortOrder,
-      moderation_status: moderationStatus,
       photo_type: photoType,
-    })
-    .select('id, storage_key, moderation_status')
-    .single();
+    },
+  });
 
-  if (insertError) {
-    await supabase.storage.from(PHOTO_BUCKET).remove([storageKey]).catch(() => {});
-    throw insertError;
+  if (error) {
+    // Non-2xx arrives as FunctionsHttpError with our JSON body attached; that
+    // message is written for the seller, so prefer it over a generic one.
+    const response = (error as { context?: Response }).context;
+    let message: string | null = null;
+    try {
+      const body = await response?.json();
+      if (body?.error) message = body.error as string;
+    } catch {
+      // No JSON body — failed below the function (gateway/network).
+    }
+    throw new Error(
+      message ??
+        (response?.status === 404
+          ? "Photo upload isn't available right now — the moderate-listing-photo function isn't deployed."
+          : 'That photo could not be added. Please try again.')
+    );
   }
+  if (data?.error) throw new Error(data.error as string);
 
+  const row = data.photo as { id: string; storage_key: string; moderation_status: string };
   return {
-    id: data.id as string,
-    storageKey: data.storage_key as string,
-    url: getListingPhotoUrl(data.storage_key as string),
-    moderationStatus: data.moderation_status as string,
+    id: row.id,
+    storageKey: row.storage_key,
+    url: getListingPhotoUrl(row.storage_key),
+    moderationStatus: row.moderation_status,
   };
 }
 
