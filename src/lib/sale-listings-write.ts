@@ -1,5 +1,8 @@
 import { createClient } from '@/lib/supabase-browser';
-import { moderateListingText } from '@/lib/moderation';
+// moderateListingText is no longer called here — text screening moved inside
+// the publish-listing Edge Function (0041), where a client can't skip it.
+// lib/moderation.ts keeps the wrapper for moderateListingPhoto, still used at
+// upload time.
 
 // Web port of the mobile app's utils/sale-listings.ts write path — create,
 // publish, update, and cancel. Deliberately skips the
@@ -83,49 +86,43 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
   return { id: listing.id, categoryIds };
 }
 
-export type PublishSaleListingInput = { id: string; description: string };
+export type PublishSaleListingInput = {
+  id: string;
+  /**
+   * Retained so callers don't all need changing, but no longer sent: the
+   * publish-listing Edge Function reads the description from the database
+   * itself, so a caller can't submit different text for screening than the
+   * row actually holds.
+   */
+  description?: string;
+};
 
+// The photo gate, text moderation, first-listing trust signal, and the
+// status/moderation_status write all moved into the publish-listing Edge
+// Function. On the client they were advisory — nothing stopped a seller
+// writing status='published', moderation_status='clean' directly and skipping
+// review. 0041_server_side_publish_gate.sql now rejects that transition at the
+// database, making this the only route through.
 export async function publishSaleListing(input: PublishSaleListingInput): Promise<void> {
   const supabase = createClient();
-  const { data: listingRow, error: fetchError } = await supabase
-    .from('sale_listings')
-    .select('seller_id')
-    .eq('id', input.id)
-    .single();
-  if (fetchError) throw fetchError;
+  const { data, error } = await supabase.functions.invoke('publish-listing', {
+    body: { listing_id: input.id },
+  });
 
-  const { data: photos, error: photosError } = await supabase
-    .from('listing_photos')
-    .select('moderation_status')
-    .eq('listing_id', input.id);
-  if (photosError) throw photosError;
-  if ((photos ?? []).some((p) => p.moderation_status !== 'approved')) {
-    throw new Error(
-      "One or more of your photos was flagged for manual review and can't be auto-approved — publishing again won't change that. Your listing has been saved as a draft; remove/replace the flagged photo, or wait for it to be manually approved."
-    );
+  if (error) {
+    // A non-2xx arrives as FunctionsHttpError with our own JSON body attached;
+    // that message is written for the seller (a rejected description's reason,
+    // or the flagged-photo explanation), so surface it rather than a generic.
+    let message = 'Something went wrong publishing your listing.';
+    try {
+      const body = await (error as { context?: Response }).context?.json();
+      if (body?.error) message = body.error as string;
+    } catch {
+      // invoke failed below our function (network/gateway) — no body to read.
+    }
+    throw new Error(message);
   }
-
-  const textResult = await moderateListingText(input.description);
-  if (textResult.decision === 'reject') {
-    throw new Error(textResult.reason || 'Your listing description needs to be revised before publishing.');
-  }
-
-  const { count: publishedCount, error: countError } = await supabase
-    .from('sale_listings')
-    .select('id', { count: 'exact', head: true })
-    .eq('seller_id', listingRow.seller_id)
-    .eq('status', 'published');
-  if (countError) throw countError;
-  const isFirstListing = (publishedCount ?? 0) === 0;
-
-  const moderationStatus: 'clean' | 'pending_review' =
-    isFirstListing || textResult.decision === 'flag' ? 'pending_review' : 'clean';
-
-  const { error: publishError } = await supabase
-    .from('sale_listings')
-    .update({ status: 'published', moderation_status: moderationStatus })
-    .eq('id', input.id);
-  if (publishError) throw publishError;
+  if (data?.error) throw new Error(data.error as string);
 }
 
 export type UpdateSaleListingInput = {
