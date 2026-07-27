@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { AiSuggestionModal } from '@/components/list-a-sale/ai-suggestion-modal';
 import { PaymentMethodToggle } from '@/components/list-a-sale/payment-method-toggle';
@@ -59,6 +60,8 @@ export function ListASaleForm({ userId }: { userId: string }) {
   const [joinEventStatus, setJoinEventStatus] = useState<JoinEventStatus>('undecided');
   const [matchedEvent, setMatchedEvent] = useState<NearbyTownWideEvent | null | undefined>(undefined);
   const [eventParticipantCount, setEventParticipantCount] = useState(0);
+
+  const router = useRouter();
 
   // Publish
   const [publishing, setPublishing] = useState(false);
@@ -160,7 +163,13 @@ export function ListASaleForm({ userId }: { userId: string }) {
     });
   }
 
-  async function handlePublish() {
+  // `publish: false` stops after the listing and its photos are saved, leaving
+  // a draft. The website had no way to do this — only Publish — even though
+  // createSaleListing always inserts a draft first and the app has offered
+  // "Save as draft" all along. That also meant a web seller could never reach
+  // the "Finish listing" path on /edit-listing, since they could never own a
+  // draft to begin with.
+  async function saveListing({ publish }: { publish: boolean }) {
     setPublishing(true);
     setPublishError(null);
     try {
@@ -185,7 +194,15 @@ export function ListASaleForm({ userId }: { userId: string }) {
       void _categoryIds;
 
       await uploadPendingPhotos(id, photos);
-      await publishSaleListing({ id, description });
+
+      if (!publish) {
+        // Straight to My Listings, where the draft is waiting with a "Finish
+        // listing" action.
+        router.push('/my-listings');
+        return;
+      }
+
+      await publishSaleListing({ id });
 
       if (joinEventStatus === 'requested' && matchedEvent) {
         try {
@@ -197,11 +214,18 @@ export function ListASaleForm({ userId }: { userId: string }) {
 
       setPublishedListingId(id);
     } catch (err) {
-      setPublishError(err instanceof Error ? err.message : 'Something went wrong publishing your sale.');
+      setPublishError(
+        err instanceof Error
+          ? err.message
+          : `Something went wrong ${publish ? 'publishing' : 'saving'} your sale.`
+      );
     } finally {
       setPublishing(false);
     }
   }
+
+  const handlePublish = () => saveListing({ publish: true });
+  const handleSaveDraft = () => saveListing({ publish: false });
 
   if (publishedListingId) {
     return (
@@ -511,14 +535,24 @@ export function ListASaleForm({ userId }: { userId: string }) {
             Continue
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={publishing}
-            className="rounded-full bg-coral px-4 py-2.5 font-display text-sm font-semibold text-paper hover:bg-[#e55a3c] disabled:opacity-60"
-          >
-            {publishing ? 'Publishing…' : 'Publish'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={publishing}
+              className="rounded-full border-2 border-tan-border bg-white px-4 py-2 font-display text-sm font-semibold text-ink hover:border-coral disabled:opacity-60"
+            >
+              Save as draft
+            </button>
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={publishing}
+              className="rounded-full bg-coral px-4 py-2.5 font-display text-sm font-semibold text-paper hover:bg-[#e55a3c] disabled:opacity-60"
+            >
+              {publishing ? 'Publishing…' : 'Publish'}
+            </button>
+          </div>
         )}
       </div>
 
