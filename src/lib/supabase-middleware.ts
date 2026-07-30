@@ -10,6 +10,11 @@ const PROTECTED_PATH_PREFIXES = [
   '/my-listings',
   '/edit-listing',
   '/profile',
+  // The recovery link establishes a session before landing here, so gating it
+  // on auth is correct — and it keeps someone from reaching the set-password
+  // form without having received the email. The page itself also handles the
+  // no-session case with a "request a new link" message.
+  '/reset-password',
   '/day-of-photos',
   '/favorites',
   '/saved-searches',

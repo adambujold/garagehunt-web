@@ -115,3 +115,59 @@ export async function acceptTerms(_prevState: AuthFormState, formData: FormData)
 
   redirect(redirectTargetFrom(formData));
 }
+
+// Password reset, step 1 of 2 — send the email. There was previously no
+// recovery path at all on either platform: the mobile "Forgot password?"
+// button had no handler and resetPasswordForEmail appeared nowhere in the
+// codebase, so anyone who forgot their password was permanently locked out.
+//
+// The recovery link lands on /auth/callback, which already exchanges the code
+// for a session, then forwards to /reset-password where the new password is
+// actually set. Reusing the callback rather than adding a second exchange
+// keeps one code path for "turn a Supabase link into a session".
+//
+// Always reports success, even for an address with no account — otherwise this
+// becomes an oracle for checking which emails are registered.
+export async function requestPasswordReset(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  const email = String(formData.get('email') ?? '').trim();
+  if (!email) return { error: 'Enter your email address.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl}/auth/callback?redirectTo=${encodeURIComponent('/reset-password')}`,
+  });
+  // Log it but don't surface it, for the same reason as above.
+  if (error) console.error('resetPasswordForEmail failed', error.message);
+
+  return { info: "If there's an account for that address, we've sent a reset link. Check your email." };
+}
+
+// Password reset, step 2 of 2 — set the new password. Requires the session the
+// recovery link established, so this can only run for someone who actually
+// received the email.
+export async function updatePassword(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  const password = String(formData.get('password') ?? '');
+  const confirm = String(formData.get('confirmPassword') ?? '');
+
+  if (password.length < 8) return { error: 'Use at least 8 characters.' };
+  if (password !== confirm) return { error: "Those passwords don't match." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: 'That reset link has expired. Request a new one and try again.' };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+
+  redirect('/?passwordUpdated=1');
+}

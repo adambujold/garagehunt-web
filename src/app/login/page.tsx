@@ -21,6 +21,12 @@ export default async function LoginPage({ searchParams }: PageProps) {
 
         <LoginForm redirectTo={target} />
 
+        <p className="-mt-1 text-right text-sm">
+          <Link href="/forgot-password" className="text-muted underline underline-offset-2 hover:text-ink">
+            Forgot password?
+          </Link>
+        </p>
+
         <div className="flex items-center gap-3 text-xs text-muted">
           <span className="h-px flex-1 bg-tan-border" />
           or
