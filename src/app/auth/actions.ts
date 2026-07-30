@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase-server';
@@ -8,6 +9,29 @@ import { TERMS_VERSION } from '@/lib/terms';
 export type AuthFormState = { error?: string; info?: string } | undefined;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+
+// Where auth emails and OAuth should return to. Derived from the request the
+// user is actually on rather than an env var: relying on NEXT_PUBLIC_SITE_URL
+// meant a deploy without it silently produced http://localhost:3000 links.
+// Supabase then rejects the redirect as unlisted and the send fails — and for
+// password reset that error is swallowed deliberately, so it can't be used to
+// probe which addresses have accounts. Net effect was a reset that reported
+// success and sent nothing, with no visible cause.
+//
+// Falls back to the env var wherever there's no request scope.
+async function resolveSiteUrl(): Promise<string> {
+  try {
+    const h = await headers();
+    const host = h.get('x-forwarded-host') ?? h.get('host');
+    if (host) {
+      const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // No request scope — fall through to the env var.
+  }
+  return siteUrl;
+}
 
 function redirectTargetFrom(formData: FormData): string {
   const value = formData.get('redirectTo');
@@ -84,7 +108,7 @@ export async function signInWithGoogle(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: `${siteUrl}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}` },
+    options: { redirectTo: `${await resolveSiteUrl()}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}` },
   });
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
   redirect(data.url);
@@ -137,7 +161,7 @@ export async function requestPasswordReset(
 
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/auth/callback?redirectTo=${encodeURIComponent('/reset-password')}`,
+    redirectTo: `${await resolveSiteUrl()}/auth/callback?redirectTo=${encodeURIComponent('/reset-password')}`,
   });
   // Log it but don't surface it, for the same reason as above.
   if (error) console.error('resetPasswordForEmail failed', error.message);
